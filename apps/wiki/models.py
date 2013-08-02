@@ -41,8 +41,9 @@ from taggit.utils import parse_tags, edit_string_for_tags
 
 import waffle
 
-from wiki import TEMPLATE_TITLE_PREFIX
 import wiki.content
+from wiki import TEMPLATE_TITLE_PREFIX
+from wiki.signals import render_done
 
 from . import kumascript
 
@@ -808,14 +809,12 @@ class Document(NotificationsMixin, models.Model):
         # time falls under the limit? Probably safer to require manual
         # intervention to free docs from deferred jail.
 
-        # Force-refresh cached JSON data after rendering.
-        json_data = self.get_json_data(stale=False)
-
         self.save()
+        render_done.send(sender=self.__class__, instance=self)
 
     def get_summary(self, strip_markup=True, use_rendered=True):
         """Attempt to get the document summary from rendered content, with
-        fallback to raw HTML"""        
+        fallback to raw HTML"""
         src = self.html
         if use_rendered:
             try:
@@ -835,10 +834,11 @@ class Document(NotificationsMixin, models.Model):
         sections = wiki.content.get_content_sections(content)
 
         summary = ''
-        if self.current_revision and self.current_revision.summary:
-            summary = self.current_revision.summary
-        else:
-            summary = self.get_summary(strip_markup=False)
+        if self.current_revision:
+            if self.current_revision.summary:
+                summary = self.current_revision.summary
+            else:
+                summary = self.get_summary(strip_markup=False)
 
         translations = []
         if self.pk:
@@ -859,7 +859,7 @@ class Document(NotificationsMixin, models.Model):
             tags = []
         else:
             tags = [x.name for x in self.tags.all()]
-         
+
         if self.modified:
             modified = self.modified.isoformat()
         else:
@@ -904,7 +904,7 @@ class Document(NotificationsMixin, models.Model):
         # Try to get ISO 8601 datestamps for the doc and the json
         json_lmod = self._json_data.get('json_modified', '')
         doc_lmod = self.modified.isoformat()
-        
+
         # If there's no parsed data or the data is stale & we care, it's time
         # to rebuild the cached JSON data.
         if (not self._json_data) or (not stale and doc_lmod > json_lmod):
@@ -1027,13 +1027,15 @@ class Document(NotificationsMixin, models.Model):
             # Come up with a unique slug (or title):
             return unique_attr()
 
-    def revert(self, revision, user):
+    def revert(self, revision, user, comment=None):
         old_review_tags = [t.name for t in revision.review_tags.all()]
         if revision.document.original == self:
             revision.based_on = revision
         revision.id = None
         revision.comment = "Revert to revision of %s by %s" % (
                 revision.created, revision.creator)
+        if comment:
+            revision.comment += ': "%s"' % comment
         revision.created = datetime.now()
         revision.creator = user
         revision.save()
@@ -1616,6 +1618,9 @@ class Document(NotificationsMixin, models.Model):
 
 @register_mapping_type
 class DocumentType(SearchMappingType, Indexable):
+
+    excerpt_fields = ['summary', 'content']
+
     @classmethod
     def get_model(cls):
         return Document
@@ -1629,6 +1634,7 @@ class DocumentType(SearchMappingType, Indexable):
             'id': obj.id,
             'title': obj.title,
             'slug': obj.slug,
+            'summary': obj.get_summary(strip_markup=True),
             'locale': obj.locale,
             'modified': obj.modified,
             'content': strip_tags(obj.rendered_html),
@@ -1641,6 +1647,7 @@ class DocumentType(SearchMappingType, Indexable):
             'id': {'type': 'integer'},
             'title': {'type': 'string'},
             'slug': {'type': 'string'},
+            'summary': {'type': 'string', 'analyzer': 'snowball'},
             'locale': {'type': 'string', 'index': 'not_analyzed'},
             'modified': {'type': 'date'},
             'content': {'type': 'string', 'analyzer': 'wikiMarkup'},
@@ -1669,14 +1676,23 @@ class DocumentType(SearchMappingType, Indexable):
         }
 
     def get_excerpt(self):
-        stripped_matches = []
-        if 'content' in self._highlight:
-            for match in self._highlight['content']:
-                stripped_matches.append(bleach.clean(match,
+        def bleach_matches(matches):
+            bleached_matches = []
+            for match in matches:
+                bleached_matches.append(bleach.clean(match,
                                                      tags=['em',],
-                                                     strip=True))
-        return u'...'.join(stripped_matches)
+                                                     strip=True)
+                                       )
+            return bleached_matches
 
+        stripped_matches = []
+        for field in self.excerpt_fields:
+            if field in self._highlight:
+                stripped_matches = bleach_matches(self._highlight[field])
+                return u'...'.join(stripped_matches)
+        if not stripped_matches:
+            return self.summary
+        return u'...'.join(stripped_matches)
 
 
 class ReviewTag(TagBase):
@@ -1818,7 +1834,8 @@ class Revision(models.Model):
             # TODO(erik): This error message ignores non-translations.
             raise ProgrammingError('Revision.based_on must be None or refer '
                                    'to a revision of the default-'
-                                   'language document.')
+                                   'language document. It was %s' %
+                                   self.based_on)
 
         if not self.title:
             self.title = self.document.title
