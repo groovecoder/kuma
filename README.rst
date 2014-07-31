@@ -6,6 +6,9 @@ Kuma
    :target: https://travis-ci.org/mozilla/kuma
    :alt: Build Status
 
+.. image:: https://coveralls.io/repos/mozilla/kuma/badge.png?branch=master
+  :target: https://coveralls.io/r/mozilla/kuma?branch=master
+
 .. image:: https://requires.io/github/mozilla/kuma/requirements.png?branch=master
    :target: https://requires.io/github/mozilla/kuma/requirements/?branch=master
    :alt: Requirements Status
