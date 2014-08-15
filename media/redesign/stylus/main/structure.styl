@@ -74,6 +74,7 @@ draw-grid();
     border-bottom-style: solid;
     border-top: 2px solid #fff;
 
+    /* margin-top will be added to small-mobile media query to ensure oauth widget doesn't overly */
     .logo {
         bidi-value(float, left, right);
         width: 205px;
@@ -317,19 +318,9 @@ a.github-button {
     position: absolute;
     top: 12px;
     z-index: 3;
-    cursor: pointer;
     border-radius: 8px;
     border: 1px solid transparent;
     display: inline-block;
-    overflow: hidden;
-
-    &.active {
-        border-color: rgba(255, 255, 255, 0.3);
-
-        .oauth-login-picker {
-            display: block;
-        }
-    }
 
     {$selector-icon} {
         margin-left: 0;
@@ -343,6 +334,17 @@ a.github-button {
 .oauth-login-options {
     padding: 4px 8px;
     background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+
+    &.active {
+        border-color: rgba(255, 255, 255, 0.3);
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+
+        .oauth-login-picker {
+            display: block;
+        }
+    }
 }
 
 .oauth-icon {
@@ -369,6 +371,8 @@ a.github-button {
     display: none;
     background: #fff;
     position: relative;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
 
     a {
         display: block;
@@ -640,6 +644,15 @@ footer {
 }
 
 
+@media $media-query-small-mobile {
+    #main-header {
+        .logo {
+            margin-top: 60px;
+        }
+    }
+}
+
+
 @media print {
     header, footer {
         display: none;
@@ -753,5 +766,14 @@ ol.pagination {
             color: #fff;
             border-radius: 5px;
         }
+    }
+}
+
+.socialaccount_providers li {
+    margin: 0 $grid-spacing 0 0;
+    display: inline-block;
+
+    span.signin {
+        min-width: 140px;
     }
 }

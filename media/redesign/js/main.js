@@ -1,4 +1,4 @@
-(function(doc, $) {
+(function(win, doc, $) {
     'use strict';
 
     /*
@@ -21,7 +21,7 @@
         Open Auth Login Heading widget
     */
     (function() {
-        var $container = $('.oauth-login-container');
+        var $container = $('.oauth-login-options');
         var activeClass = 'active';
         var fadeSpeed = 300;
 
@@ -40,8 +40,8 @@
             // Track event of which was clicked
             var serviceUsed = $(this).data('service'); // "Persona" or "GitHub"
             mdn.analytics.trackEvent({
-                category: 'Sign-in',
-                action: 'Start',
+                category: 'Authentication',
+                action: 'Started sign-in',
                 label: serviceUsed.toLowerCase()
             });
 
@@ -234,8 +234,11 @@
         // Inject notifications
         $.each(mdn.notifications || [], function() {
             // Make it so
-            $('<div class="notification ' + this.level + ' '  + this.tags + '">' + this.message + '</div>')[insertLocation.method](insertLocation.selector);
+            $('<div class="notification ' + this.level + ' ' + this.tags + '" data-level="' + this.level + '">' + this.message + '</div>')[insertLocation.method](insertLocation.selector);
         });
+
+        // Make them official
+        mdn.Notifier.discover();
     })();
 
     /*
@@ -247,5 +250,44 @@
         cache: true
     });
 
+    /*
+        Track users successfully logging in and out
+    */
+    ('localStorage' in win) && (function() {
+        var serviceKey = 'login-service';
+        var serviceStored = localStorage.getItem(serviceKey);
+        var serviceCurrent = $('body').data(serviceKey);
 
-})(document, jQuery);
+        try {
+
+            // User just logged in
+            if(serviceCurrent && !serviceStored) {
+                localStorage.setItem(serviceKey, serviceCurrent);
+
+                mdn.optimizely.push(['trackEvent', 'login-' + serviceCurrent]);
+                mdn.analytics.trackEvent({
+                    category: 'Authentication',
+                    action: 'Finished sign-in',
+                    label: serviceCurrent
+                });
+            }
+
+            // User just logged out
+            else if(!serviceCurrent && serviceStored) {
+                localStorage.removeItem(serviceKey);
+
+                mdn.optimizely.push(['trackEvent', 'logout-' + serviceStored]);
+                mdn.analytics.trackEvent({
+                    category: 'Authentication',
+                    action: 'Signed out',
+                    label: serviceStored
+                });
+            }
+
+        }
+        catch (e) {
+            // Browser probably doesn't support localStorage
+        }
+    })();
+
+})(window, document, jQuery);
