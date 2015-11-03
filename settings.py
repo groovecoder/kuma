@@ -761,6 +761,7 @@ PIPELINE_JS = {
             'js/libs/jquery/jquery.js',
             'js/components.js',
             'js/analytics.js',
+            'js/libs/webjoy.min.js',
             'js/main.js',
             'js/auth.js',
             'js/libs/fontfaceobserver/fontfaceobserver.js',
